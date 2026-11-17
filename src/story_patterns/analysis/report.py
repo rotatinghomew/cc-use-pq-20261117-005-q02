@@ -5,6 +5,7 @@ from typing import Any
 
 from story_patterns.catalog.validate import canonical_json, digest_json
 from story_patterns.analysis.agreement import pairwise_agreement
+from story_patterns.analysis.anchors import recheck_decisions, summarize_recheck
 from story_patterns.analysis.evidence import evidence_coverage
 from story_patterns.analysis.sensitivity import leave_one_reader_out
 from story_patterns.analysis.revision_drift import compare_revisions
@@ -28,7 +29,7 @@ def _consensus(votes: list[str], minimum: int) -> tuple[str | None, str]:
 
 def build_report(stories: list[dict], decisions: dict[tuple[str, int], list[dict]],
                  tradition: str | None, minimum: int, origins: dict | None = None,
-                 adjudications: dict | None = None) -> dict[str, Any]:
+                 adjudications: dict | None = None, all_stories: list[dict] | None = None) -> dict[str, Any]:
     pattern_counts: Counter = Counter()
     outcome_counts: Counter = Counter()
     final_pattern_counts: Counter = Counter()
@@ -38,6 +39,8 @@ def build_report(stories: list[dict], decisions: dict[tuple[str, int], list[dict
     resolution_counts: Counter = Counter()
     used_decisions = []
     story_results = []
+    recheck = recheck_decisions(all_stories or stories, decisions, adjudications)
+    decision_rechecks = recheck["decisions"]
     for story in stories:
         identity = (story["story_id"], story["revision"])
         votes = decisions.get(identity, [])
@@ -58,6 +61,11 @@ def build_report(stories: list[dict], decisions: dict[tuple[str, int], list[dict
         if final_outcome not in {None, "unknown"}:
             final_outcome_counts[final_outcome] += 1
         used_decisions.extend(item["decision_id"] for item in votes)
+        vote_rechecks = [decision_rechecks[item["decision_id"]] for item in votes
+                         if item["decision_id"] in decision_rechecks]
+        anchor_status = "unstructured"
+        if vote_rechecks:
+            anchor_status = _recheck_status(vote_rechecks)
         story_results.append({
             "story_id": story["story_id"], "revision": story["revision"],
             "title": story["title"], "tradition": story["tradition"],
@@ -69,6 +77,10 @@ def build_report(stories: list[dict], decisions: dict[tuple[str, int], list[dict
             "adjudication_rationale": adjudication["rationale"] if adjudication else None,
             "adjudication_evidence_event_ids": adjudication["evidence_event_ids"] if adjudication else [],
             "reviewer_count": len(votes),
+            "anchor_recheck_status": anchor_status,
+            "anchors_requiring_recheck": sum(
+                1 for item in vote_rechecks for anchor in item["anchors"] if anchor["status"] != "intact"
+            ),
         })
     return {
         "criteria": {"tradition": tradition, "minimum_reviewers": minimum,
@@ -88,7 +100,13 @@ def build_report(stories: list[dict], decisions: dict[tuple[str, int], list[dict
                               for key in ("reader_consensus", "adjudicated")},
         "story_results": story_results,
         "reviewer_agreement": pairwise_agreement(decisions),
-        "evidence_coverage": evidence_coverage(stories, decisions),
+        "evidence_coverage": evidence_coverage(stories, decisions, decision_rechecks),
+        "anchor_recheck": {
+            "scope": "each decision against the latest revision of its story",
+            "latest_revision_by_story": recheck["latest_revision_by_story"],
+            "decisions": summarize_recheck(decision_rechecks),
+            "adjudications": summarize_recheck(recheck["adjudications"]),
+        },
         "reader_sensitivity": leave_one_reader_out(stories, decisions, minimum),
         "reader_vote_distribution": vote_distribution(stories, decisions),
         "sample_profile": build_sample_profile(stories),
@@ -108,6 +126,16 @@ def build_report(stories: list[dict], decisions: dict[tuple[str, int], list[dict
     }
 
 
+def _recheck_status(results: list[dict]) -> str:
+    if any(item["status"] == "unverifiable" for item in results):
+        return "unverifiable"
+    if any(item["status"] == "drifted" for item in results):
+        return "drifted"
+    if any(not item["legacy_free_text"] for item in results):
+        return "intact"
+    return "unstructured"
+
+
 class ReportService:
     def __init__(self, store):
         self.store = store
@@ -116,9 +144,10 @@ class ReportService:
         from story_patterns.analysis.cohorts import select_cohort, validate_minimum
 
         minimum = validate_minimum(minimum)
-        stories, decisions, origins, adjudications = self.store.analysis_snapshot(tradition)
-        stories = select_cohort(stories, tradition)
-        result = build_report(stories, decisions, tradition, minimum, origins, adjudications)
+        all_stories, decisions, origins, adjudications = self.store.analysis_snapshot(None)
+        stories = select_cohort(all_stories, tradition)
+        result = build_report(stories, decisions, tradition, minimum, origins, adjudications,
+                              all_stories=all_stories)
         report_id = digest_json(result)[:24]
         request_digest = digest_json({"criteria": result["criteria"], "provenance": result["provenance"]})
         document = canonical_json({"report_id": report_id, **result})

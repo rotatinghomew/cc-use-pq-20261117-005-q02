@@ -16,7 +16,7 @@ def compare_traditions(stories: list[dict], decisions: dict, minimum: int, adjud
         cohort_decisions = {identity: decisions.get(identity, []) for identity in identities}
         cohort_adjudications = {identity: adjudications.get(identity) for identity in identities} if adjudications else None
         summary = build_report(cohort, cohort_decisions, tradition, minimum,
-                               adjudications=cohort_adjudications)
+                               adjudications=cohort_adjudications, all_stories=stories)
         pattern_denominator = summary["population"]["pattern_consensus"]
         outcome_denominator = summary["population"]["outcome_consensus"]
         final_pattern_denominator = sum(summary["final_pattern_counts"].values())

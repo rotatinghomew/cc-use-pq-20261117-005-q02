@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from story_patterns.analysis.anchors import anchor_events, normalize_anchors
 from story_patterns.catalog.validate import canonical_json, digest_json, _text
 from story_patterns.errors import ConflictError, NotFoundError, ValidationError
 
@@ -26,14 +27,21 @@ def normalize_adjudication(raw: dict, story: dict) -> dict:
         raise ValidationError("adjudication cites an event outside this story revision")
     if len(evidence) != len(set(evidence)):
         raise ValidationError("adjudication evidence cannot repeat")
+    anchors = normalize_anchors(raw.get("evidence_anchors"), story)
+    uncovered = anchor_events(anchors) - set(evidence)
+    if uncovered:
+        raise ValidationError("evidence anchors may only cite events named in evidence_event_ids")
     rationale = _text(raw.get("rationale"), "rationale", 1500)
-    return {
+    record = {
         "adjudication_id": record_id,
         "story_id": story["story_id"], "story_revision": story["revision"],
         "moderator": moderator, "sequence": sequence, "pattern": pattern,
         "youngest_outcome": outcome, "evidence_event_ids": sorted(evidence),
         "rationale": rationale,
     }
+    if anchors:
+        record["evidence_anchors"] = anchors
+    return record
 
 
 class AdjudicationService:
@@ -64,9 +72,11 @@ class AdjudicationService:
                 raise ConflictError("adjudication sequence is already occupied for this story revision")
             connection.execute(
                 "INSERT INTO adjudications(adjudication_id, story_id, story_revision, moderator, sequence, pattern, "
-                "youngest_outcome, evidence_event_ids, rationale, digest) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                "youngest_outcome, evidence_event_ids, evidence_anchors, rationale, digest) "
+                "VALUES(?,?,?,?,?,?,?,?,?,?,?)",
                 (record["adjudication_id"], story_id, revision, record["moderator"], record["sequence"],
                  record["pattern"], record["youngest_outcome"], canonical_json(record["evidence_event_ids"]),
+                 canonical_json(record.get("evidence_anchors", [])),
                  record["rationale"], digest),
             )
         return {"adjudication_id": record["adjudication_id"], "status": "recorded"}

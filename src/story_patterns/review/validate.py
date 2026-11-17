@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from story_patterns.analysis.anchors import anchor_events, normalize_anchors
 from story_patterns.catalog.validate import _text, normalize_story
 from story_patterns.errors import ValidationError
 
@@ -26,10 +27,14 @@ def normalize_decision(raw: dict, story: dict) -> dict:
         raise ValidationError("evidence_event_ids must refer to events in this revision")
     if len(evidence_ids) != len(set(evidence_ids)):
         raise ValidationError("evidence_event_ids cannot repeat")
+    anchors = normalize_anchors(raw.get("evidence_anchors"), story)
+    uncovered = anchor_events(anchors) - set(evidence_ids)
+    if uncovered:
+        raise ValidationError("evidence anchors may only cite events named in evidence_event_ids")
     note = raw.get("note", "")
     if not isinstance(note, str) or len(note) > 1000:
         raise ValidationError("note must be text of at most 1000 characters")
-    return {
+    record = {
         "decision_id": decision_id,
         "story_id": story["story_id"],
         "story_revision": story["revision"],
@@ -40,3 +45,6 @@ def normalize_decision(raw: dict, story: dict) -> dict:
         "evidence_event_ids": sorted(evidence_ids),
         "note": note.strip(),
     }
+    if anchors:
+        record["evidence_anchors"] = anchors
+    return record

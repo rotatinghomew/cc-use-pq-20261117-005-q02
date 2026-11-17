@@ -15,6 +15,8 @@ def compare_revisions(stories: list[dict]) -> list[dict]:
             current_characters = {item["character_id"]: item for item in current["characters"]}
             previous_events = {item["event_id"]: item for item in previous["events"]}
             current_events = {item["event_id"]: item for item in current["events"]}
+            previous_passages = {item["passage_id"]: item for item in previous.get("passages") or []}
+            current_passages = {item["passage_id"]: item for item in current.get("passages") or []}
             shared_events = previous_events.keys() & current_events.keys()
             changes.append({
                 "story_id": story_id,
@@ -32,8 +34,23 @@ def compare_revisions(stories: list[dict]) -> list[dict]:
                 "events_removed": sorted(previous_events.keys() - current_events.keys()),
                 "event_content_changed": sorted(
                     event_id for event_id in shared_events
-                    if previous_events[event_id] != current_events[event_id]
+                    if _event_content(previous_events[event_id]) != _event_content(current_events[event_id])
+                ),
+                "passages_added": sorted(set(current_passages) - set(previous_passages)),
+                "passages_removed": sorted(set(previous_passages) - set(current_passages)),
+                "passage_positions_changed": sorted(
+                    key for key in set(previous_passages) & set(current_passages)
+                    if (previous_passages[key].get("chapter"), previous_passages[key]["paragraph"]) !=
+                    (current_passages[key].get("chapter"), current_passages[key]["paragraph"])
+                ),
+                "event_positions_changed": sorted(
+                    event_id for event_id in shared_events
+                    if previous_events[event_id].get("passage_id") != current_events[event_id].get("passage_id")
                 ),
                 "requires_separate_review": True,
             })
     return changes
+
+
+def _event_content(event: dict) -> tuple:
+    return (event["actor_id"], event["action"], event["consequence"], event["evidence"])

@@ -27,6 +27,53 @@ def _text(value: Any, field: str, limit: int = 500) -> str:
     return value
 
 
+def _verbatim(value: Any, field: str, limit: int) -> str:
+    """保留原文空白，供引文、范围和材料全文逐字核对。"""
+    if not isinstance(value, str) or not value.strip():
+        raise ValidationError(f"{field} must be a non-empty string")
+    if len(value) > limit:
+        raise ValidationError(f"{field} exceeds {limit} characters")
+    return value
+
+
+def _normalize_passages(value: Any) -> list[dict[str, Any]] | None:
+    if value is None:
+        return None
+    if not isinstance(value, list) or not value:
+        raise ValidationError("passages must be a non-empty list when provided")
+    passages = []
+    passage_ids: set[str] = set()
+    positions: set[tuple[str, int]] = set()
+    for item in value:
+        if not isinstance(item, dict):
+            raise ValidationError("each passage must be an object")
+        passage_id = _text(item.get("passage_id"), "passage.passage_id", 100)
+        chapter = item.get("chapter")
+        if chapter is not None:
+            chapter = _text(chapter, "passage.chapter", 120)
+        paragraph = item.get("paragraph")
+        if type(paragraph) is not int or paragraph < 1:
+            raise ValidationError("passage.paragraph must be a positive integer")
+        position = (chapter or "", paragraph)
+        if passage_id in passage_ids or position in positions:
+            raise ValidationError("passage identifiers and chapter/paragraph positions must be unique")
+        passage_ids.add(passage_id)
+        positions.add(position)
+        entry = {
+            "passage_id": passage_id,
+            "paragraph": paragraph,
+            "text": _verbatim(item.get("text"), "passage.text", 5000),
+        }
+        if chapter is not None:
+            entry["chapter"] = chapter
+        passages.append(entry)
+    return passages
+
+
+def _position_of(passages: list[dict[str, Any]] | None) -> dict[str, dict[str, Any]]:
+    return {item["passage_id"]: item for item in (passages or [])}
+
+
 def normalize_story(raw: Any) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raise ValidationError("each story must be an object")
@@ -49,6 +96,11 @@ def normalize_story(raw: Any) -> dict[str, Any]:
         raise ValidationError("characters must be a non-empty list")
     if not isinstance(events, list) or not events:
         raise ValidationError("events must be a non-empty list")
+    normalized_passages = _normalize_passages(raw.get("passages"))
+    material_text = raw.get("text")
+    if material_text is not None:
+        material_text = _verbatim(material_text, "text", 20000)
+    passage_ids = {item["passage_id"] for item in normalized_passages or []}
     normalized_characters = []
     character_ids: set[str] = set()
     orders: set[int] = set()
@@ -92,10 +144,11 @@ def normalize_story(raw: Any) -> dict[str, Any]:
             "action": _text(item.get("action"), "event.action", 300),
             "consequence": _text(item.get("consequence"), "event.consequence", 300),
             "evidence": _text(item.get("evidence"), "event.evidence", 1000),
+            **_event_locator(item, passage_ids, event_id),
         })
     if sorted(sequences) != list(range(1, len(events) + 1)):
         raise ValidationError("event sequences must be contiguous and start at one")
-    return {
+    document = {
         "story_id": story_id,
         "revision": revision,
         "title": title,
@@ -104,6 +157,22 @@ def normalize_story(raw: Any) -> dict[str, Any]:
         "characters": sorted(normalized_characters, key=lambda item: item["sibling_order"]),
         "events": sorted(normalized_events, key=lambda item: item["sequence"]),
     }
+    if normalized_passages is not None:
+        document["passages"] = normalized_passages
+    if material_text is not None:
+        document["text"] = material_text
+    return document
+
+
+def _event_locator(item: dict, passage_ids: set[str], event_id: str) -> dict[str, Any]:
+    """把段落定位与自由文本依据分开保存，避免旧记录被强制改写。"""
+    passage_id = item.get("passage_id")
+    if passage_id is None:
+        return {}
+    passage_id = _text(passage_id, "event.passage_id", 100)
+    if passage_id not in passage_ids:
+        raise ValidationError(f"event {event_id} references an unknown passage")
+    return {"passage_id": passage_id}
 
 
 def normalize_batch(raw: Any) -> tuple[str, list[dict[str, Any]], str]:

@@ -12,7 +12,13 @@ def build_manifest(batches: list[dict], stories: list[dict]) -> dict:
         "batches": sorted(batches, key=lambda item: item["batch_id"]),
         "story_revisions": [
             {"story_id": item["story_id"], "revision": item["revision"],
-             "source_reference": item["source"]["reference"], "source_kind": item["source"]["kind"]}
+             "source_reference": item["source"]["reference"], "source_kind": item["source"]["kind"],
+             "has_stable_passages": bool(item.get("passages")),
+             "event_evidence_text": [
+                 {"event_id": event["event_id"], "evidence": event["evidence"],
+                  "passage_id": event.get("passage_id")}
+                 for event in item["events"]
+             ]}
             for item in sorted(stories, key=lambda value: (value["story_id"], value["revision"]))
         ],
     }

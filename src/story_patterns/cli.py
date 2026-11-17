@@ -123,9 +123,11 @@ def execute(arguments: argparse.Namespace) -> dict:
                                   revision_policy=arguments.revision_policy)
     fixture = read_json(arguments.fixture)
     imported = app.import_batch(fixture["batch"])
+    revision_imports = [app.import_batch(revision) for revision in fixture.get("revisions", [])]
     decisions = [app.record_decision(item) for item in fixture["decisions"]]
     report = app.create_report(fixture.get("tradition"), fixture.get("minimum_reviewers", 2))
-    return {"import": imported, "decisions_recorded": len(decisions), "report": report}
+    return {"import": imported, "revision_imports": revision_imports,
+            "decisions_recorded": len(decisions), "report": report}
 
 
 def main(argv: list[str] | None = None) -> int:

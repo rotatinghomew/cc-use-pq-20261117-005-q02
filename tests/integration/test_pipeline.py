@@ -74,6 +74,41 @@ class EndToEndResearchWorkflowTests(AppCase, unittest.TestCase):
         self.assertEqual(output["report"]["pattern_counts"], {"harm": 1, "parallel": 1})
         self.assertEqual(output["report"]["population"]["story_revisions"], 2)
 
+    def test_anchor_demo_shows_insertion_deletion_and_reordering(self):
+        anchor_fixture = Path(__file__).resolve().parents[2] / "fixtures" / "anchors.json"
+        content = fixture(anchor_fixture)
+        self.assertTrue(all(story_data["source"]["kind"] == "local_synthetic"
+                            for story_data in content["batch"]["stories"]))
+        self.assertEqual([item["batch_id"] for item in content["revisions"]],
+                         ["anchor-demo-v2", "anchor-demo-v3"])
+        with tempfile.TemporaryDirectory() as directory:
+            database = str(Path(directory) / "anchors.sqlite3")
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                exit_code = main(["demo", "--database", database, "--fixture", str(anchor_fixture)])
+            output = json.loads(stdout.getvalue())
+            with contextlib.redirect_stdout(io.StringIO()) as queue_output:
+                main(["queue", "--database", database])
+            queue = json.loads(queue_output.getvalue())
+        self.assertEqual(exit_code, 0)
+        report = output["report"]
+        statuses = report["anchor_recheck"]["decisions"]
+        self.assertEqual(statuses["status_counts"],
+                         {"intact": 1, "drifted": 1, "unverifiable": 1, "unstructured": 1})
+        self.assertEqual(statuses["flagged_record_ids"], ["anchor-a-1", "anchor-b-1"])
+        self.assertEqual(report["anchor_recheck"]["latest_revision_by_story"]["well-and-bridge"], 3)
+        invalid = report["evidence_coverage"]["invalid_anchor_citations"]
+        self.assertEqual([item["event_ids"] for item in invalid], [["sign-bridge"]])
+        story_row = next(row for row in report["evidence_coverage"]["stories"]
+                         if (row["story_id"], row["revision"]) == ("well-and-bridge", 1))
+        self.assertEqual(story_row["unverifiable_citation_event_ids"], ["sign-bridge"])
+        self.assertEqual(story_row["cited_events"], 2)
+        flagged = next(row for row in queue["stories"]
+                       if (row["story_id"], row["revision"]) == ("well-and-bridge", 1))
+        self.assertEqual(flagged["status"], "evidence_recheck")
+        legacy = next(row for row in queue["stories"] if row["story_id"] == "reed-flute")
+        self.assertEqual(legacy["status"], "ready")
+
     def test_cli_reports_input_errors_without_success_shaped_json(self):
         with tempfile.TemporaryDirectory() as directory:
             bad_file = Path(directory) / "broken.json"

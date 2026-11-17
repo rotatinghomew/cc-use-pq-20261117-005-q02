@@ -37,6 +37,9 @@ def search_stories(stories: list[dict], text: str | None = None, tradition: str 
         searchable = [story["title"], story["tradition"], story["source"]["reference"]]
         searchable.extend(item["name"] for item in characters)
         searchable.extend(event[field] for event in story["events"] for field in ("action", "consequence", "evidence"))
+        searchable.extend(passage["text"] for passage in story.get("passages") or [])
+        if story.get("text"):
+            searchable.append(story["text"])
         if needle and not any(needle in value.casefold() for value in searchable):
             continue
         matching_events = [event["event_id"] for event in story["events"]

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from story_patterns.analysis.anchors import recheck_decisions
 from story_patterns.catalog.validate import canonical_json, digest_json
 from story_patterns.errors import ConflictError, NotFoundError
 from story_patterns.review.validate import normalize_decision
@@ -37,10 +38,13 @@ class ReviewService:
                 raise ConflictError("annotator sequence is already occupied for this story revision")
             connection.execute(
                 "INSERT INTO decisions(decision_id, story_id, story_revision, annotator, sequence, pattern, "
-                "youngest_outcome, evidence_event_ids, note, digest) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                "youngest_outcome, evidence_event_ids, evidence_anchors, note, digest) "
+                "VALUES(?,?,?,?,?,?,?,?,?,?,?)",
                 (decision["decision_id"], story_id, revision, decision["annotator"], decision["sequence"],
                  decision["pattern"], decision["youngest_outcome"],
-                 canonical_json(decision["evidence_event_ids"]), decision["note"], digest),
+                 canonical_json(decision["evidence_event_ids"]),
+                 canonical_json(decision.get("evidence_anchors", [])),
+                 decision["note"], digest),
             )
         return {"decision_id": decision["decision_id"], "status": "recorded"}
 
@@ -52,8 +56,9 @@ class ReviewService:
         from story_patterns.review.readiness import build_review_queue, queue_totals
 
         minimum = validate_minimum(minimum_reviewers)
-        stories, decisions, _origins, adjudications = self.store.analysis_snapshot(tradition)
-        rows = build_review_queue(select_cohort(stories, tradition), decisions, minimum, adjudications)
+        stories, decisions, _origins, adjudications = self.store.analysis_snapshot(None)
+        rows = build_review_queue(select_cohort(stories, tradition), decisions, minimum, adjudications,
+                                  all_stories=stories)
         return {"minimum_reviewers": minimum, "total": len(rows), "by_status": queue_totals(rows), "stories": rows}
 
     def record_adjudication(self, record: dict) -> dict:
@@ -68,6 +73,13 @@ class ReviewService:
         latest_by_reader = {item["annotator"]: item["sequence"] for item in votes}
         for item in votes:
             item["current"] = item["sequence"] == latest_by_reader[item["annotator"]]
+        all_stories, decisions, _origins, all_adjudications = self.store.analysis_snapshot(None)
+        recheck = recheck_decisions(all_stories, decisions, all_adjudications)
+        for item in votes:
+            item["anchor_recheck"] = recheck["decisions"].get(item["decision_id"])
+        for item in adjudications:
+            item["anchor_recheck"] = recheck["adjudications"].get(item["adjudication_id"])
         return {"story_id": story_id, "revision": revision, "decisions": votes,
                 "adjudications": adjudications,
+                "latest_revision_by_story": recheck["latest_revision_by_story"].get(story_id),
                 "active_adjudication_id": adjudications[-1]["adjudication_id"] if adjudications else None}

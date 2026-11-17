@@ -23,6 +23,11 @@ def audit_catalog(snapshot: dict) -> dict:
         if normalized != document or (normalized["title"], normalized["tradition"], normalized["source"]["kind"]) != (
                 row["title"], row["tradition"], row["source_kind"]):
             issues.append(_issue("story", identity, "document and indexed columns disagree"))
+        event_passages = {item["passage_id"] for item in normalized.get("passages") or []}
+        for event in normalized["events"]:
+            if event.get("passage_id") is not None and event["passage_id"] not in event_passages:
+                issues.append(_issue("story", identity,
+                                     f"event {event['event_id']} references an unknown passage"))
         stories[identity] = normalized
     batch_rows = {row["batch_id"]: row for row in snapshot["batches"]}
     grouped = defaultdict(list)
@@ -54,6 +59,9 @@ def audit_catalog(snapshot: dict) -> dict:
             payload = {key: row[key] for key in ("decision_id", "story_id", "story_revision", "annotator", "sequence",
                                                   "pattern", "youngest_outcome", "note")}
             payload["evidence_event_ids"] = json.loads(row["evidence_event_ids"])
+            anchors = json.loads(row.get("evidence_anchors") or "[]")
+            if anchors:
+                payload["evidence_anchors"] = anchors
             normalized = normalize_decision(payload, story)
             if digest_json(normalized) != row["digest"]:
                 issues.append(_issue("decision", row["decision_id"], "stored decision digest does not match content"))
@@ -69,6 +77,9 @@ def audit_catalog(snapshot: dict) -> dict:
             payload = {key: row[key] for key in ("adjudication_id", "story_id", "story_revision", "moderator",
                                                   "sequence", "pattern", "youngest_outcome", "rationale")}
             payload["evidence_event_ids"] = json.loads(row["evidence_event_ids"])
+            anchors = json.loads(row.get("evidence_anchors") or "[]")
+            if anchors:
+                payload["evidence_anchors"] = anchors
             normalized = normalize_adjudication(payload, story)
             if digest_json(normalized) != row["digest"]:
                 issues.append(_issue("adjudication", row["adjudication_id"], "stored digest does not match content"))

@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS decisions (
     pattern TEXT NOT NULL,
     youngest_outcome TEXT NOT NULL,
     evidence_event_ids TEXT NOT NULL,
+    evidence_anchors TEXT NOT NULL DEFAULT '[]',
     note TEXT NOT NULL,
     digest TEXT NOT NULL,
     UNIQUE(story_id, story_revision, annotator, sequence),
@@ -54,6 +55,7 @@ CREATE TABLE IF NOT EXISTS adjudications (
     pattern TEXT NOT NULL,
     youngest_outcome TEXT NOT NULL,
     evidence_event_ids TEXT NOT NULL,
+    evidence_anchors TEXT NOT NULL DEFAULT '[]',
     rationale TEXT NOT NULL,
     digest TEXT NOT NULL,
     UNIQUE(story_id, story_revision, sequence),
@@ -66,6 +68,14 @@ CREATE TABLE IF NOT EXISTS reports (
     document TEXT NOT NULL
 );
 """
+
+
+def _record(row: sqlite3.Row) -> dict:
+    record = dict(row)
+    record["evidence_event_ids"] = json.loads(record["evidence_event_ids"])
+    raw_anchors = record.pop("evidence_anchors", "[]")
+    record["evidence_anchors"] = json.loads(raw_anchors) if raw_anchors else []
+    return record
 
 
 class StoryStore:
@@ -88,8 +98,18 @@ class StoryStore:
         try:
             connection.execute("PRAGMA journal_mode = WAL")
             connection.executescript(SCHEMA)
+            self._migrate_anchor_columns(connection)
         finally:
             connection.close()
+
+    def _migrate_anchor_columns(self, connection: sqlite3.Connection) -> None:
+        """已有台账没有锚点列时补一列空列表，旧记录继续作为自由文本证据读取。"""
+        for table in ("decisions", "adjudications"):
+            columns = {row["name"] for row in connection.execute(f"PRAGMA table_info({table})")}
+            if "evidence_anchors" not in columns:
+                connection.execute(
+                    f"ALTER TABLE {table} ADD COLUMN evidence_anchors TEXT NOT NULL DEFAULT '[]'"
+                )
 
     @contextmanager
     def transaction(self):
@@ -142,7 +162,7 @@ class StoryStore:
                 "WHERE d.story_id=? AND d.story_revision=? ORDER BY d.annotator",
                 (story_id, revision, story_id, revision),
             ).fetchall()
-        return [dict(row) | {"evidence_event_ids": json.loads(row["evidence_event_ids"])} for row in rows]
+        return [_record(row) for row in rows]
 
     def decision_history(self, story_id: str, revision: int) -> tuple[list[dict], list[dict]]:
         with self.read_connection() as connection:
@@ -155,8 +175,8 @@ class StoryStore:
                 (story_id, revision),
             ).fetchall()
         return (
-            [dict(row) | {"evidence_event_ids": json.loads(row["evidence_event_ids"])} for row in votes],
-            [dict(row) | {"evidence_event_ids": json.loads(row["evidence_event_ids"])} for row in adjudications],
+            [_record(row) for row in votes],
+            [_record(row) for row in adjudications],
         )
 
     def latest_decisions_for_stories(self, identities: list[tuple[str, int]]) -> dict[tuple[str, int], list[dict]]:
@@ -189,16 +209,13 @@ class StoryStore:
                     "WHERE d.story_id=? AND d.story_revision=? ORDER BY d.annotator",
                     (story_id, revision, story_id, revision),
                 ).fetchall()
-                decisions[(story_id, revision)] = [
-                    dict(row) | {"evidence_event_ids": json.loads(row["evidence_event_ids"])} for row in latest
-                ]
+                decisions[(story_id, revision)] = [_record(row) for row in latest]
                 adjudication = connection.execute(
                     "SELECT * FROM adjudications WHERE story_id=? AND story_revision=? "
                     "ORDER BY sequence DESC LIMIT 1", (story_id, revision)
                 ).fetchone()
                 adjudications[(story_id, revision)] = (
-                    dict(adjudication) | {"evidence_event_ids": json.loads(adjudication["evidence_event_ids"])}
-                    if adjudication else None
+                    _record(adjudication) if adjudication else None
                 )
             origins = {identity: [] for identity in identities}
             if identities:

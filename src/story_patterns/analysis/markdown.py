@@ -36,6 +36,26 @@ def render_report(report: dict) -> str:
     coverage = report["coverage"]["pattern"]
     lines.extend(_table([{"status": key, "count": value} for key, value in coverage.items()],
                         [("status", "Pattern review status"), ("count", "Stories")]))
+    recheck = report.get("anchor_recheck")
+    if recheck:
+        lines.extend([
+            "", "## Evidence anchor recheck", "",
+            "Each anchored decision is compared with the latest revision of its story. "
+            "`drifted` anchors remain locatable but moved; `unverifiable` anchors do not count "
+            "toward event coverage. `unstructured` records predate anchors and keep their free-text evidence.", "",
+        ])
+        lines.extend(_table(
+            [{"status": key, "count": value}
+             for key, value in recheck["decisions"]["status_counts"].items()],
+            [("status", "Decision anchor status"), ("count", "Decisions")]))
+        flagged = recheck["decisions"]["flagged_record_ids"]
+        if flagged:
+            lines.extend(["", f"Decisions requiring recheck: {', '.join(flagged)}"])
+        invalid = report["evidence_coverage"].get("invalid_anchor_citations", [])
+        if invalid:
+            lines.extend(["", "Anchors excluded from event coverage:", ""])
+            lines.extend(_table(invalid, [("decision_id", "Decision"), ("event_ids", "Event IDs"),
+                                          ("problem", "Problem")]))
     lines.extend(["", "## Provenance", "", "Story revisions and decision IDs used:", "",
                   "```json", json.dumps(report["provenance"], ensure_ascii=False, indent=2), "```", ""])
     return "\n".join(lines)

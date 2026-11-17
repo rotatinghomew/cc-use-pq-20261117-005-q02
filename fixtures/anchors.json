@@ -1,0 +1,146 @@
+{
+  "batch": {
+    "batch_id": "anchor-demo-v1",
+    "stories": [
+      {
+        "story_id": "well-and-bridge",
+        "revision": 1,
+        "title": "井与桥",
+        "tradition": "local_fable",
+        "source": {"reference": "本地合成样本 D（含稳定段落）", "kind": "local_synthetic"},
+        "characters": [
+          {"character_id": "elder-a", "name": "阿大", "sibling_order": 1},
+          {"character_id": "middle-a", "name": "阿二", "sibling_order": 2},
+          {"character_id": "young-a", "name": "阿三", "sibling_order": 3}
+        ],
+        "passages": [
+          {"passage_id": "p-well", "chapter": "第一章", "paragraph": 1, "text": "阿大先到井边，把唯一的木桶藏进草堆。"},
+          {"passage_id": "p-bridge", "chapter": "第一章", "paragraph": 2, "text": "阿二修好木桥，却在桥上留下自己的名字。"},
+          {"passage_id": "p-share", "chapter": "第二章", "paragraph": 1, "text": "阿三把井水与过桥的人分着喝。"}
+        ],
+        "events": [
+          {"event_id": "hide-bucket", "sequence": 1, "actor_id": "elder-a", "passage_id": "p-well",
+           "action": "把木桶藏进草堆", "consequence": "弟妹无法取水", "evidence": "阿大先到井边，把唯一的木桶藏进草堆。"},
+          {"event_id": "sign-bridge", "sequence": 2, "actor_id": "middle-a", "passage_id": "p-bridge",
+           "action": "修好木桥并署名", "consequence": "过桥者只记得他的名字", "evidence": "阿二修好木桥，却在桥上留下自己的名字。"},
+          {"event_id": "share-water", "sequence": 3, "actor_id": "young-a", "passage_id": "p-share",
+           "action": "分井水给过客", "consequence": "全村得以解渴", "evidence": "阿三把井水与过桥的人分着喝。"}
+        ]
+      },
+      {
+        "story_id": "reed-flute",
+        "revision": 1,
+        "title": "芦苇笛",
+        "tradition": "river_tales",
+        "source": {"reference": "本地合成样张 D2（无稳定段落编号）", "kind": "local_synthetic"},
+        "characters": [
+          {"character_id": "reed-a", "name": "芦苇甲", "sibling_order": 1},
+          {"character_id": "reed-b", "name": "芦苇乙", "sibling_order": 2},
+          {"character_id": "reed-c", "name": "芦苇丙", "sibling_order": 3}
+        ],
+        "events": [
+          {"event_id": "cut-reed", "sequence": 1, "actor_id": "reed-a", "action": "割下最直的芦苇", "consequence": "笛声清亮", "evidence": "口述录音转写第 3 段：他割下最直的芦苇。"},
+          {"event_id": "break-flute", "sequence": 2, "actor_id": "reed-b", "action": "借走笛子后折断", "consequence": "笛声中断", "evidence": "口述录音转写第 5 段：笛子在他手里折了。"},
+          {"event_id": "mend-flute", "sequence": 3, "actor_id": "reed-c", "action": "用树脂粘合断笛", "consequence": "笛声重新响起", "evidence": "口述录音转写第 8 段：他用树脂把断口粘住。"}
+        ]
+      }
+    ]
+  },
+  "decisions": [
+    {
+      "decision_id": "anchor-a-1", "story_id": "well-and-bridge", "story_revision": 1,
+      "annotator": "reader-a", "sequence": 1, "pattern": "parallel", "youngest_outcome": "wins",
+      "evidence_event_ids": ["hide-bucket", "share-water"],
+      "evidence_anchors": [
+        {"event_id": "hide-bucket", "passage_id": "p-well", "quote": "把唯一的木桶藏进草堆"},
+        {"event_id": "share-water", "passage_id": "p-share", "quote": "把井水与过桥的人分着喝"}
+      ]
+    },
+    {
+      "decision_id": "anchor-b-1", "story_id": "well-and-bridge", "story_revision": 1,
+      "annotator": "reader-b", "sequence": 1, "pattern": "parallel", "youngest_outcome": "wins",
+      "evidence_event_ids": ["hide-bucket", "sign-bridge"],
+      "evidence_anchors": [
+        {"event_id": "hide-bucket", "chapter": "第一章", "paragraph": 1, "quote": "把唯一的木桶藏进草堆"},
+        {"event_id": "sign-bridge", "chapter": "第一章", "paragraph": 2, "quote": "在桥上留下自己的名字"}
+      ]
+    },
+    {
+      "decision_id": "legacy-c-1", "story_id": "reed-flute", "story_revision": 1,
+      "annotator": "reader-c", "sequence": 1, "pattern": "harm", "youngest_outcome": "mixed",
+      "evidence_event_ids": ["cut-reed", "break-flute"],
+      "note": "口述转写没有稳定段落编号；依据是第 3、5 段录音转写。"
+    },
+    {
+      "decision_id": "anchor-d-1", "story_id": "reed-flute", "story_revision": 1,
+      "annotator": "reader-d", "sequence": 1, "pattern": "harm", "youngest_outcome": "mixed",
+      "evidence_event_ids": ["break-flute"],
+      "evidence_anchors": [
+        {"event_id": "break-flute", "quote": "笛子在他手里折了。"}
+      ]
+    }
+  ],
+  "revisions": [
+    {
+      "batch_id": "anchor-demo-v2",
+      "stories": [
+        {
+          "story_id": "well-and-bridge",
+          "revision": 2,
+          "title": "井与桥（校订本）",
+          "tradition": "local_fable",
+          "source": {"reference": "本地合成样本 D 校订版（插段与重排）", "kind": "local_synthetic"},
+          "characters": [
+            {"character_id": "elder-a", "name": "阿大", "sibling_order": 1},
+            {"character_id": "middle-a", "name": "阿二", "sibling_order": 2},
+            {"character_id": "young-a", "name": "阿三", "sibling_order": 3}
+          ],
+          "passages": [
+            {"passage_id": "p-prologue", "chapter": "序", "paragraph": 1, "text": "这三件事都发生在同一口井边。"},
+            {"passage_id": "p-bridge", "chapter": "第一章", "paragraph": 1, "text": "阿二修好木桥，却在桥上留下自己的名字。"},
+            {"passage_id": "p-well", "chapter": "第一章", "paragraph": 2, "text": "阿大随后到井边，把唯一的木桶藏进草堆。"},
+            {"passage_id": "p-share", "chapter": "第二章", "paragraph": 1, "text": "阿三把井水与过桥的人分着喝。"}
+          ],
+          "events": [
+            {"event_id": "hide-bucket", "sequence": 2, "actor_id": "elder-a", "passage_id": "p-well",
+             "action": "把木桶藏进草堆", "consequence": "弟妹无法取水", "evidence": "阿大随后到井边，把唯一的木桶藏进草堆。"},
+            {"event_id": "sign-bridge", "sequence": 1, "actor_id": "middle-a", "passage_id": "p-bridge",
+             "action": "修好木桥并署名", "consequence": "过桥者只记得他的名字", "evidence": "阿二修好木桥，却在桥上留下自己的名字。"},
+            {"event_id": "share-water", "sequence": 3, "actor_id": "young-a", "passage_id": "p-share",
+             "action": "分井水给过客", "consequence": "全村得以解渴", "evidence": "阿三把井水与过桥的人分着喝。"}
+          ]
+        }
+      ]
+    },
+    {
+      "batch_id": "anchor-demo-v3",
+      "stories": [
+        {
+          "story_id": "well-and-bridge",
+          "revision": 3,
+          "title": "井与桥（删节本）",
+          "tradition": "local_fable",
+          "source": {"reference": "本地合成样本 D 删节版（删去修桥段，井边段落保留原文并移位）", "kind": "local_synthetic"},
+          "characters": [
+            {"character_id": "elder-a", "name": "阿大", "sibling_order": 1},
+            {"character_id": "middle-a", "name": "阿二", "sibling_order": 2},
+            {"character_id": "young-a", "name": "阿三", "sibling_order": 3}
+          ],
+          "passages": [
+            {"passage_id": "p-prologue", "chapter": "序", "paragraph": 1, "text": "这三件事都发生在同一口井边。"},
+            {"passage_id": "p-well", "chapter": "第一章", "paragraph": 1, "text": "阿大先到井边，把唯一的木桶藏进草堆。"},
+            {"passage_id": "p-share", "chapter": "第二章", "paragraph": 1, "text": "阿三把井水与过桥的人分着喝。"}
+          ],
+          "events": [
+            {"event_id": "hide-bucket", "sequence": 1, "actor_id": "elder-a", "passage_id": "p-well",
+             "action": "把木桶藏进草堆", "consequence": "弟妹无法取水", "evidence": "阿大先到井边，把唯一的木桶藏进草堆。"},
+            {"event_id": "share-water", "sequence": 2, "actor_id": "young-a", "passage_id": "p-share",
+             "action": "分井水给过客", "consequence": "全村得以解渴", "evidence": "阿三把井水与过桥的人分着喝。"}
+          ]
+        }
+      ]
+    }
+  ],
+  "tradition": null,
+  "minimum_reviewers": 2
+}
